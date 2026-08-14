@@ -1,1 +1,41 @@
+name: Free Video Renderer
 
+on:
+  workflow_dispatch:
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Check FFmpeg
+        run: |
+          ffmpeg -version
+
+      - name: Create test video
+        run: |
+          mkdir -p output
+
+          ffmpeg \
+            -f lavfi \
+            -i color=c=black:s=1080x1920:r=30 \
+            -t 4 \
+            -vf "format=yuv420p" \
+            -c:v libx264 \
+            -preset veryfast \
+            -pix_fmt yuv420p \
+            output/scene1-test.mp4
+
+      - name: Upload rendered video
+        uses: actions/upload-artifact@v4
+        with:
+          name: scene1-test
+          path: output/scene1-test.mp4
