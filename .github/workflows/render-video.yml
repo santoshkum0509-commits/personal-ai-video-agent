@@ -16,25 +16,21 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg
 
-      - name: Check FFmpeg
+      - name: Verify FFmpeg
         run: |
           ffmpeg -version
 
       - name: Create test video
         run: |
           mkdir -p output
+          ffmpeg -f lavfi -i "color=c=black:s=1080x1920:r=30" -t 4 -c:v libx264 -pix_fmt yuv420p output/scene1-test.mp4
 
-          ffmpeg \
-            -f lavfi \
-            -i color=c=black:s=1080x1920:r=30 \
-            -t 4 \
-            -vf "format=yuv420p" \
-            -c:v libx264 \
-            -preset veryfast \
-            -pix_fmt yuv420p \
-            output/scene1-test.mp4
+      - name: Verify output
+        run: |
+          ls -lh output/
+          ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1 output/scene1-test.mp4
 
-      - name: Upload rendered video
+      - name: Upload test video
         uses: actions/upload-artifact@v4
         with:
           name: scene1-test
