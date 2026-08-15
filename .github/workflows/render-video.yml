@@ -11,35 +11,35 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install FFmpeg and Hindi Fonts
+      - name: Install FFmpeg
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg fonts-noto-core fonts-noto-extra fontconfig
+          sudo apt-get install -y ffmpeg
 
       - name: Check FFmpeg
         run: |
           ffmpeg -version
 
-      - name: Check Hindi Font
-        run: |
-          fc-match "Noto Sans Devanagari"
-
-      - name: Create test video
+      - name: Create Hinglish Test Video
         run: |
           mkdir -p output
-
-          FONT=$(fc-match -f '%{file}\n' "Noto Sans Devanagari" | head -n 1)
-
-          echo "Using font: $FONT"
 
           ffmpeg \
             -f lavfi \
             -i color=c=black:s=1080x1920:r=30 \
             -t 4 \
-            -vf "drawtext=fontfile='$FONT':text='अगर आपको एक ऐसा AI tool मिल जाए':fontcolor=white:fontsize=52:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,0,4)',format=yuv420p" \
+            -vf "drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:text='Agar aapko ek aisa AI tool mil jaye':fontcolor=white:fontsize=52:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,0,4)',format=yuv420p" \
             -c:v libx264 \
             -preset veryfast \
             -pix_fmt yuv420p \
+            output/scene1-test.mp4
+
+      - name: Check Video
+        run: |
+          ls -lh output/scene1-test.mp4
+          ffprobe -v error \
+            -show_entries format=duration,size \
+            -of default=noprint_wrappers=1 \
             output/scene1-test.mp4
 
       - name: Upload rendered video
