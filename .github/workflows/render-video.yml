@@ -16,74 +16,121 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg jq
 
-      - name: Read Scene 1 JSON
+      - name: Read Scene 1
         run: |
-          echo "Reading scene1.json..."
+          jq -r '.onScreenText' scene1.json > scene_text.txt
+          jq -r '.duration' scene1.json > duration.txt
 
-          TEXT=$(jq -r '.onScreenText' scene1.json)
-          DURATION=$(jq -r '.duration' scene1.json)
+          echo "Scene text:"
+          cat scene_text.txt
 
-          echo "Original text:"
-          echo "$TEXT"
+          echo "Duration:"
+          cat duration.txt
 
-          echo "Duration: $DURATION"
-
-          echo "TEXT=$TEXT" >> "$GITHUB_ENV"
-          echo "DURATION=$DURATION" >> "$GITHUB_ENV"
-
-      - name: Create Wrapped Text
+      - name: Create SVG Text
         run: |
           python3 - <<'PY'
+          import html
           import json
-          import textwrap
 
           with open("scene1.json", "r", encoding="utf-8") as f:
               data = json.load(f)
 
           text = data["onScreenText"]
 
-          lines = textwrap.wrap(
-              text,
-              width=32,
-              break_long_words=False,
-              break_on_hyphens=False
-          )
+          words = text.split()
+          lines = []
+          current = ""
 
-          with open("output_text.txt", "w", encoding="utf-8") as f:
-              f.write("\n".join(lines))
+          for word in words:
+              test = (current + " " + word).strip()
 
-          print("Wrapped text:")
-          print("\n".join(lines))
+              if len(test) > 30:
+                  if current:
+                      lines.append(current)
+                  current = word
+              else:
+                  current = test
+
+          if current:
+              lines.append(current)
+
+          print("Final lines:")
+          for line in lines:
+              print(line)
+
+          start_y = 850
+          line_gap = 85
+
+          text_elements = []
+
+          for i, line in enumerate(lines):
+              y = start_y + (i * line_gap)
+
+              text_elements.append(
+                  f'<text x="540" y="{y}" '
+                  f'text-anchor="middle" '
+                  f'font-family="DejaVu Sans, Arial, sans-serif" '
+                  f'font-size="52" '
+                  f'font-weight="700" '
+                  f'fill="white">{html.escape(line)}</text>'
+              )
+
+          svg = f'''<svg xmlns="http://www.w3.org/2000/svg"
+          width="1080"
+          height="1920"
+          viewBox="0 0 1080 1920">
+
+          <rect width="1080" height="1920" fill="black"/>
+
+          {''.join(text_elements)}
+
+          </svg>'''
+
+          with open("scene1.svg", "w", encoding="utf-8") as f:
+              f.write(svg)
+
+          print("SVG created successfully.")
           PY
 
-          echo "Text file created:"
-          cat output_text.txt
+          echo "----- SVG -----"
+          cat scene1.svg
+
+      - name: Convert SVG to PNG
+        run: |
+          ffmpeg \
+            -y \
+            -i scene1.svg \
+            -frames:v 1 \
+            scene1.png
 
       - name: Create Scene 1 Video
         run: |
-          mkdir -p output
+          DURATION=$(cat duration.txt)
 
           ffmpeg \
-            -f lavfi \
-            -i color=c=black:s=1080x1920:r=30 \
+            -y \
+            -loop 1 \
+            -i scene1.png \
             -t "$DURATION" \
-            -vf "drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:textfile=output_text.txt:fontcolor=white:fontsize=52:line_spacing=18:x=(w-text_w)/2:y=(h-text_h)/2:fix_bounds=true,format=yuv420p" \
+            -r 30 \
             -c:v libx264 \
             -preset veryfast \
             -pix_fmt yuv420p \
-            output/scene1.mp4
+            -vf "scale=1080:1920" \
+            output_scene1.mp4
 
-      - name: Check Output
+      - name: Check Video
         run: |
-          ls -lh output/scene1.mp4
+          ls -lh output_scene1.mp4
 
           ffprobe -v error \
             -show_entries format=duration,size \
             -of default=noprint_wrappers=1 \
-            output/scene1.mp4
+            output_scene1.mp4
 
       - name: Upload Scene 1
         uses: actions/upload-artifact@v4
         with:
           name: scene1
-          path: output/scene1.mp4
+          path: output_scene1.mp4
