@@ -27,7 +27,7 @@ jobs:
           echo "Duration:"
           cat duration.txt
 
-      - name: Create SVG Text
+      - name: Create SVG Scene
         run: |
           python3 - <<'PY'
           import html
@@ -55,48 +55,107 @@ jobs:
           if current:
               lines.append(current)
 
-          print("Final lines:")
-          for line in lines:
-              print(line)
-
-          start_y = 850
-          line_gap = 85
+          start_y = 820
+          line_gap = 90
 
           text_elements = []
 
           for i, line in enumerate(lines):
-              y = start_y + (i * line_gap)
+              y = start_y + i * line_gap
 
               text_elements.append(
-                  f'<text x="540" y="{y}" '
-                  f'text-anchor="middle" '
-                  f'font-family="DejaVu Sans, Arial, sans-serif" '
-                  f'font-size="52" '
-                  f'font-weight="700" '
-                  f'fill="white">{html.escape(line)}</text>'
+                  f'''
+                  <text
+                    x="540"
+                    y="{y}"
+                    text-anchor="middle"
+                    font-family="DejaVu Sans, Arial, sans-serif"
+                    font-size="52"
+                    font-weight="700"
+                    fill="white"
+                    stroke="black"
+                    stroke-width="3"
+                    paint-order="stroke">
+                    {html.escape(line)}
+                  </text>
+                  '''
               )
 
-          svg = f'''<svg xmlns="http://www.w3.org/2000/svg"
-          width="1080"
-          height="1920"
-          viewBox="0 0 1080 1920">
+          svg = f'''
+          <svg xmlns="http://www.w3.org/2000/svg"
+               width="1080"
+               height="1920"
+               viewBox="0 0 1080 1920">
 
-          <rect width="1080" height="1920" fill="black"/>
+            <defs>
+              <linearGradient id="bg"
+                              x1="0"
+                              y1="0"
+                              x2="1"
+                              y2="1">
+                <stop offset="0%" stop-color="#07111f"/>
+                <stop offset="50%" stop-color="#102a43"/>
+                <stop offset="100%" stop-color="#03070d"/>
+              </linearGradient>
 
-          {''.join(text_elements)}
+              <radialGradient id="glow">
+                <stop offset="0%" stop-color="#2f80ed"
+                      stop-opacity="0.45"/>
+                <stop offset="100%" stop-color="#2f80ed"
+                      stop-opacity="0"/>
+              </radialGradient>
+            </defs>
 
-          </svg>'''
+            <rect width="1080" height="1920"
+                  fill="url(#bg)"/>
+
+            <circle cx="180" cy="350"
+                    r="450"
+                    fill="url(#glow)"/>
+
+            <circle cx="900" cy="1500"
+                    r="550"
+                    fill="url(#glow)"/>
+
+            <g opacity="0.12"
+               stroke="white"
+               stroke-width="2">
+
+              <path d="M0 300 H1080"/>
+              <path d="M0 600 H1080"/>
+              <path d="M0 900 H1080"/>
+              <path d="M0 1200 H1080"/>
+              <path d="M0 1500 H1080"/>
+
+              <path d="M180 0 V1920"/>
+              <path d="M360 0 V1920"/>
+              <path d="M540 0 V1920"/>
+              <path d="M720 0 V1920"/>
+              <path d="M900 0 V1920"/>
+            </g>
+
+            <text x="540"
+                  y="620"
+                  text-anchor="middle"
+                  font-family="DejaVu Sans, Arial, sans-serif"
+                  font-size="34"
+                  font-weight="700"
+                  fill="#9ccaff">
+              AI TOOL
+            </text>
+
+            {''.join(text_elements)}
+
+          </svg>
+          '''
 
           with open("scene1.svg", "w", encoding="utf-8") as f:
               f.write(svg)
 
-          print("SVG created successfully.")
+          print("SVG scene created.")
           PY
 
-          echo "----- SVG -----"
-          cat scene1.svg
-
-      - name: Convert SVG to PNG
+      - name: Convert Scene to PNG
         run: |
           ffmpeg \
             -y \
@@ -106,6 +165,8 @@ jobs:
 
       - name: Create Scene 1 Video
         run: |
+          mkdir -p output
+
           DURATION=$(cat duration.txt)
 
           ffmpeg \
@@ -118,19 +179,20 @@ jobs:
             -preset veryfast \
             -pix_fmt yuv420p \
             -vf "scale=1080:1920" \
-            output_scene1.mp4
+            output/scene1.mp4
 
       - name: Check Video
         run: |
-          ls -lh output_scene1.mp4
+          ls -lh output/scene1.mp4
 
-          ffprobe -v error \
+          ffprobe \
+            -v error \
             -show_entries format=duration,size \
             -of default=noprint_wrappers=1 \
-            output_scene1.mp4
+            output/scene1.mp4
 
       - name: Upload Scene 1
         uses: actions/upload-artifact@v4
         with:
           name: scene1
-          path: output_scene1.mp4
+          path: output/scene1.mp4
