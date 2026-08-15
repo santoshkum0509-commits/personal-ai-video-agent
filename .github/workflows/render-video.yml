@@ -11,45 +11,39 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install FFmpeg and Hindi font
+      - name: Install FFmpeg and Hindi Fonts
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg fonts-noto-core
+          sudo apt-get install -y ffmpeg fonts-noto-core fonts-noto-extra fontconfig
 
       - name: Check FFmpeg
         run: |
           ffmpeg -version
 
-      - name: Check Hindi font
+      - name: Check Hindi Font
         run: |
-          fc-list | grep -i "Noto Sans Devanagari" | head
+          fc-match "Noto Sans Devanagari"
 
-      - name: Create output folder
+      - name: Create test video
         run: |
           mkdir -p output
 
-      - name: Create Scene 1
-        run: |
+          FONT=$(fc-match -f '%{file}\n' "Noto Sans Devanagari" | head -n 1)
+
+          echo "Using font: $FONT"
+
           ffmpeg \
             -f lavfi \
-            -i "color=c=black:s=1080x1920:r=30" \
+            -i color=c=black:s=1080x1920:r=30 \
             -t 4 \
-            -vf "drawtext=fontfile=/usr/share/fonts/truetype/noto/NotoSansDevanagari-Regular.ttf:text='अगर आपको एक ऐसा AI tool मिल जाए':fontcolor=white:fontsize=58:x=(w-text_w)/2:y=(h-text_h)/2:line_spacing=12" \
+            -vf "drawtext=fontfile='$FONT':text='अगर आपको एक ऐसा AI tool मिल जाए':fontcolor=white:fontsize=52:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,0,4)',format=yuv420p" \
             -c:v libx264 \
             -preset veryfast \
             -pix_fmt yuv420p \
-            output/scene1.mp4
-
-      - name: Verify video
-        run: |
-          ls -lh output/
-          ffprobe -v error \
-            -show_entries format=duration \
-            -of default=noprint_wrappers=1 \
-            output/scene1.mp4
+            output/scene1-test.mp4
 
       - name: Upload rendered video
         uses: actions/upload-artifact@v4
         with:
-          name: actual-scene-test
-          path: output/scene1.mp4
+          name: scene1-test
+          path: output/scene1-test.mp4
