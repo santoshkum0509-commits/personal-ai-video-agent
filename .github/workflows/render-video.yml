@@ -23,11 +23,41 @@ jobs:
           TEXT=$(jq -r '.onScreenText' scene1.json)
           DURATION=$(jq -r '.duration' scene1.json)
 
-          echo "Text: $TEXT"
+          echo "Original text:"
+          echo "$TEXT"
+
           echo "Duration: $DURATION"
 
           echo "TEXT=$TEXT" >> "$GITHUB_ENV"
           echo "DURATION=$DURATION" >> "$GITHUB_ENV"
+
+      - name: Create Wrapped Text
+        run: |
+          python3 - <<'PY'
+          import json
+          import textwrap
+
+          with open("scene1.json", "r", encoding="utf-8") as f:
+              data = json.load(f)
+
+          text = data["onScreenText"]
+
+          lines = textwrap.wrap(
+              text,
+              width=32,
+              break_long_words=False,
+              break_on_hyphens=False
+          )
+
+          with open("output_text.txt", "w", encoding="utf-8") as f:
+              f.write("\n".join(lines))
+
+          print("Wrapped text:")
+          print("\n".join(lines))
+          PY
+
+          echo "Text file created:"
+          cat output_text.txt
 
       - name: Create Scene 1 Video
         run: |
@@ -37,7 +67,7 @@ jobs:
             -f lavfi \
             -i color=c=black:s=1080x1920:r=30 \
             -t "$DURATION" \
-            -vf "drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:text='$TEXT':fontcolor=white:fontsize=52:x=(w-text_w)/2:y=(h-text_h)/2:line_spacing=12:enable='between(t,0,$DURATION)',format=yuv420p" \
+            -vf "drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:textfile=output_text.txt:fontcolor=white:fontsize=52:line_spacing=18:x=(w-text_w)/2:y=(h-text_h)/2:fix_bounds=true,format=yuv420p" \
             -c:v libx264 \
             -preset veryfast \
             -pix_fmt yuv420p \
