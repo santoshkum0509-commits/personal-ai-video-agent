@@ -27,7 +27,7 @@ jobs:
           echo "Duration:"
           cat duration.txt
 
-      - name: Create SVG Scene
+      - name: Create Animated Scene SVG
         run: |
           python3 - <<'PY'
           import html
@@ -55,13 +55,13 @@ jobs:
           if current:
               lines.append(current)
 
-          start_y = 820
-          line_gap = 90
-
           text_elements = []
 
+          start_y = 800
+          line_gap = 88
+
           for i, line in enumerate(lines):
-              y = start_y + i * line_gap
+              y = start_y + (i * line_gap)
 
               text_elements.append(
                   f'''
@@ -88,60 +88,118 @@ jobs:
                viewBox="0 0 1080 1920">
 
             <defs>
-              <linearGradient id="bg"
+
+              <linearGradient id="background"
                               x1="0"
                               y1="0"
                               x2="1"
                               y2="1">
-                <stop offset="0%" stop-color="#07111f"/>
-                <stop offset="50%" stop-color="#102a43"/>
-                <stop offset="100%" stop-color="#03070d"/>
+
+                <stop offset="0%"
+                      stop-color="#07111f"/>
+
+                <stop offset="50%"
+                      stop-color="#123456"/>
+
+                <stop offset="100%"
+                      stop-color="#02050a"/>
+
               </linearGradient>
 
-              <radialGradient id="glow">
-                <stop offset="0%" stop-color="#2f80ed"
-                      stop-opacity="0.45"/>
-                <stop offset="100%" stop-color="#2f80ed"
+              <radialGradient id="glow1">
+
+                <stop offset="0%"
+                      stop-color="#4da3ff"
+                      stop-opacity="0.55"/>
+
+                <stop offset="100%"
+                      stop-color="#4da3ff"
                       stop-opacity="0"/>
+
               </radialGradient>
+
+              <radialGradient id="glow2">
+
+                <stop offset="0%"
+                      stop-color="#7b61ff"
+                      stop-opacity="0.45"/>
+
+                <stop offset="100%"
+                      stop-color="#7b61ff"
+                      stop-opacity="0"/>
+
+              </radialGradient>
+
             </defs>
 
-            <rect width="1080" height="1920"
-                  fill="url(#bg)"/>
+            <rect width="1080"
+                  height="1920"
+                  fill="url(#background)"/>
 
-            <circle cx="180" cy="350"
-                    r="450"
-                    fill="url(#glow)"/>
+            <circle cx="150"
+                    cy="350"
+                    r="500"
+                    fill="url(#glow1)"/>
 
-            <circle cx="900" cy="1500"
-                    r="550"
-                    fill="url(#glow)"/>
+            <circle cx="930"
+                    cy="1500"
+                    r="600"
+                    fill="url(#glow2)"/>
 
-            <g opacity="0.12"
+            <g opacity="0.10"
                stroke="white"
                stroke-width="2">
 
-              <path d="M0 300 H1080"/>
-              <path d="M0 600 H1080"/>
-              <path d="M0 900 H1080"/>
-              <path d="M0 1200 H1080"/>
+              <path d="M0 250 H1080"/>
+              <path d="M0 500 H1080"/>
+              <path d="M0 750 H1080"/>
+              <path d="M0 1000 H1080"/>
+              <path d="M0 1250 H1080"/>
               <path d="M0 1500 H1080"/>
+              <path d="M0 1750 H1080"/>
 
               <path d="M180 0 V1920"/>
               <path d="M360 0 V1920"/>
               <path d="M540 0 V1920"/>
               <path d="M720 0 V1920"/>
               <path d="M900 0 V1920"/>
+
             </g>
 
+            <circle cx="540"
+                    cy="500"
+                    r="120"
+                    fill="none"
+                    stroke="#5db4ff"
+                    stroke-width="5"
+                    opacity="0.65"/>
+
+            <circle cx="540"
+                    cy="500"
+                    r="75"
+                    fill="none"
+                    stroke="#ffffff"
+                    stroke-width="3"
+                    opacity="0.8"/>
+
             <text x="540"
-                  y="620"
+                  y="510"
                   text-anchor="middle"
                   font-family="DejaVu Sans, Arial, sans-serif"
-                  font-size="34"
+                  font-size="42"
+                  font-weight="700"
+                  fill="white">
+              AI
+            </text>
+
+            <text x="540"
+                  y="650"
+                  text-anchor="middle"
+                  font-family="DejaVu Sans, Arial, sans-serif"
+                  font-size="30"
                   font-weight="700"
                   fill="#9ccaff">
-              AI TOOL
+              FREE AI TOOL
             </text>
 
             {''.join(text_elements)}
@@ -152,10 +210,10 @@ jobs:
           with open("scene1.svg", "w", encoding="utf-8") as f:
               f.write(svg)
 
-          print("SVG scene created.")
+          print("Animated-style SVG created successfully.")
           PY
 
-      - name: Convert Scene to PNG
+      - name: Render SVG to PNG
         run: |
           ffmpeg \
             -y \
@@ -163,7 +221,7 @@ jobs:
             -frames:v 1 \
             scene1.png
 
-      - name: Create Scene 1 Video
+      - name: Create Animated Video
         run: |
           mkdir -p output
 
@@ -175,13 +233,13 @@ jobs:
             -i scene1.png \
             -t "$DURATION" \
             -r 30 \
+            -vf "scale=1080:1920,zoompan=z='min(zoom+0.0008,1.035)':d=120:s=1080x1920:fps=30,format=yuv420p" \
             -c:v libx264 \
             -preset veryfast \
             -pix_fmt yuv420p \
-            -vf "scale=1080:1920" \
             output/scene1.mp4
 
-      - name: Check Video
+      - name: Check Output
         run: |
           ls -lh output/scene1.mp4
 
@@ -194,5 +252,5 @@ jobs:
       - name: Upload Scene 1
         uses: actions/upload-artifact@v4
         with:
-          name: scene1
+          name: scene1-animated
           path: output/scene1.mp4
