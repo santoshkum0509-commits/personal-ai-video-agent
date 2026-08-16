@@ -8,44 +8,132 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
+      # --------------------------------------------------
+      # 1. Checkout repository
+      # --------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install FFmpeg and TTS
+
+      # --------------------------------------------------
+      # 2. Install required tools
+      # --------------------------------------------------
+      - name: Install FFmpeg and dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg jq espeak-ng
+          sudo apt-get install -y ffmpeg python3-pip wget
 
+
+      # --------------------------------------------------
+      # 3. Install Piper TTS
+      # --------------------------------------------------
+      - name: Install Piper TTS
+        run: |
+          python3 -m pip install --upgrade pip
+          pip install piper-tts
+
+
+      # --------------------------------------------------
+      # 4. Download Hindi voice model
+      # --------------------------------------------------
+      - name: Download Hindi Voice Model
+        run: |
+          mkdir -p models
+
+          wget -q \
+            https://huggingface.co/rhasspy/piper-voices/resolve/main/hi/hi_IN/pratham/medium/hi_IN-pratham-medium.onnx \
+            -O models/hi_IN-pratham-medium.onnx
+
+          wget -q \
+            https://huggingface.co/rhasspy/piper-voices/resolve/main/hi/hi_IN/pratham/medium/hi_IN-pratham-medium.onnx.json \
+            -O models/hi_IN-pratham-medium.onnx.json
+
+          echo "Voice model downloaded."
+
+          ls -lh models/
+
+
+      # --------------------------------------------------
+      # 5. Read Scene 1
+      # --------------------------------------------------
       - name: Read Scene 1
         run: |
-          jq -r '.onScreenText' scene1.json > scene_text.txt
-          jq -r '.duration' scene1.json > duration.txt
+          python3 - <<'PY'
+          import json
 
-          echo "Scene text:"
-          cat scene_text.txt
+          with open("scene1.json", "r", encoding="utf-8") as f:
+              data = json.load(f)
 
-          echo "Duration:"
-          cat duration.txt
+          text = data.get("onScreenText", "")
 
-      - name: Create Voiceover
+          print("Original Scene Text:")
+          print(text)
+
+          # Save original text
+          with open("original_text.txt", "w", encoding="utf-8") as f:
+              f.write(text)
+
+          # Hindi-friendly TTS pronunciation
+          tts_text = text
+
+          replacements = {
+              "AI tool": "ए आई टूल",
+              "AI": "ए आई",
+              "minutes": "मिनट्स",
+              "try": "ट्राय",
+              "tool": "टूल"
+          }
+
+          for old, new in replacements.items():
+              tts_text = tts_text.replace(old, new)
+
+          with open("tts_text.txt", "w", encoding="utf-8") as f:
+              f.write(tts_text)
+
+          print("")
+          print("TTS Text:")
+          print(tts_text)
+          PY
+
+
+      # --------------------------------------------------
+      # 6. Generate Natural Hindi Voice
+      # --------------------------------------------------
+      - name: Generate Hindi Voiceover
         run: |
-          echo "Creating free offline voiceover..."
+          mkdir -p audio
 
-          espeak-ng \
-            -v en \
-            -s 145 \
-            -p 45 \
-            -a 170 \
-            -f scene_text.txt \
-            -w voice.wav
+          cat tts_text.txt | \
+            piper \
+              --model models/hi_IN-pratham-medium.onnx \
+              --output_file audio/voice.wav
 
-          ffprobe \
+          echo "Voice generated successfully."
+
+          ls -lh audio/voice.wav
+
+
+      # --------------------------------------------------
+      # 7. Detect Voice Duration
+      # --------------------------------------------------
+      - name: Detect Voice Duration
+        run: |
+          VOICE_DURATION=$(ffprobe \
             -v error \
             -show_entries format=duration \
-            -of default=noprint_wrappers=1 \
-            voice.wav
+            -of default=noprint_wrappers=1:nokey=1 \
+            audio/voice.wav)
 
-      - name: Create Animated SVG
+          echo "Voice duration: $VOICE_DURATION seconds"
+
+          echo "$VOICE_DURATION" > voice_duration.txt
+
+
+      # --------------------------------------------------
+      # 8. Create Professional SVG Visual
+      # --------------------------------------------------
+      - name: Create Scene Visual
         run: |
           python3 - <<'PY'
           import html
@@ -54,9 +142,11 @@ jobs:
           with open("scene1.json", "r", encoding="utf-8") as f:
               data = json.load(f)
 
-          text = data["onScreenText"]
+          text = data.get("onScreenText", "")
 
+          # Split text into readable lines
           words = text.split()
+
           lines = []
           current = ""
 
@@ -73,103 +163,134 @@ jobs:
           if current:
               lines.append(current)
 
-          start_y = 800
-          line_gap = 88
-
           text_elements = []
 
+          start_y = 850
+          line_gap = 82
+
           for i, line in enumerate(lines):
+
               y = start_y + (i * line_gap)
 
               text_elements.append(
-                  f'''
+                  f"""
                   <text
                     x="540"
                     y="{y}"
                     text-anchor="middle"
                     font-family="DejaVu Sans, Arial, sans-serif"
-                    font-size="52"
+                    font-size="50"
                     font-weight="700"
                     fill="white"
-                    stroke="black"
+                    stroke="#000000"
                     stroke-width="3"
                     paint-order="stroke">
+
                     {html.escape(line)}
+
                   </text>
-                  '''
+                  """
               )
 
-          svg = f'''
-          <svg xmlns="http://www.w3.org/2000/svg"
-               width="1080"
-               height="1920"
-               viewBox="0 0 1080 1920">
+          svg = f"""
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="1080"
+            height="1920"
+            viewBox="0 0 1080 1920">
 
             <defs>
 
-              <linearGradient id="background"
-                              x1="0"
-                              y1="0"
-                              x2="1"
-                              y2="1">
+              <linearGradient
+                id="bg"
+                x1="0"
+                y1="0"
+                x2="1"
+                y2="1">
 
-                <stop offset="0%" stop-color="#07111f"/>
-                <stop offset="50%" stop-color="#123456"/>
-                <stop offset="100%" stop-color="#02050a"/>
+                <stop
+                  offset="0%"
+                  stop-color="#050B18"/>
+
+                <stop
+                  offset="50%"
+                  stop-color="#102D4F"/>
+
+                <stop
+                  offset="100%"
+                  stop-color="#020409"/>
 
               </linearGradient>
 
-              <radialGradient id="glow1">
+              <radialGradient id="glowBlue">
 
-                <stop offset="0%"
-                      stop-color="#4da3ff"
-                      stop-opacity="0.55"/>
+                <stop
+                  offset="0%"
+                  stop-color="#168CFF"
+                  stop-opacity="0.55"/>
 
-                <stop offset="100%"
-                      stop-color="#4da3ff"
-                      stop-opacity="0"/>
+                <stop
+                  offset="100%"
+                  stop-color="#168CFF"
+                  stop-opacity="0"/>
 
               </radialGradient>
 
-              <radialGradient id="glow2">
+              <radialGradient id="glowPurple">
 
-                <stop offset="0%"
-                      stop-color="#7b61ff"
-                      stop-opacity="0.45"/>
+                <stop
+                  offset="0%"
+                  stop-color="#7B4DFF"
+                  stop-opacity="0.40"/>
 
-                <stop offset="100%"
-                      stop-color="#7b61ff"
-                      stop-opacity="0"/>
+                <stop
+                  offset="100%"
+                  stop-color="#7B4DFF"
+                  stop-opacity="0"/>
 
               </radialGradient>
 
             </defs>
 
-            <rect width="1080"
-                  height="1920"
-                  fill="url(#background)"/>
 
-            <circle cx="150"
-                    cy="350"
-                    r="500"
-                    fill="url(#glow1)"/>
+            <!-- Background -->
+            <rect
+              width="1080"
+              height="1920"
+              fill="url(#bg)"/>
 
-            <circle cx="930"
-                    cy="1500"
-                    r="600"
-                    fill="url(#glow2)"/>
 
-            <g opacity="0.10"
-               stroke="white"
-               stroke-width="2">
+            <!-- Blue glow -->
+            <circle
+              cx="150"
+              cy="350"
+              r="550"
+              fill="url(#glowBlue)"/>
 
-              <path d="M0 250 H1080"/>
-              <path d="M0 500 H1080"/>
-              <path d="M0 750 H1080"/>
+
+            <!-- Purple glow -->
+            <circle
+              cx="950"
+              cy="1500"
+              r="650"
+              fill="url(#glowPurple)"/>
+
+
+            <!-- Grid -->
+            <g
+              opacity="0.10"
+              stroke="white"
+              stroke-width="2">
+
+              <path d="M0 200 H1080"/>
+              <path d="M0 400 H1080"/>
+              <path d="M0 600 H1080"/>
+              <path d="M0 800 H1080"/>
               <path d="M0 1000 H1080"/>
-              <path d="M0 1250 H1080"/>
-              <path d="M0 1500 H1080"/>
-              <path d="M0 1750 H1080"/>
+              <path d="M0 1200 H1080"/>
+              <path d="M0 1400 H1080"/>
+              <path d="M0 1600 H1080"/>
+              <path d="M0 1800 H1080"/>
 
               <path d="M180 0 V1920"/>
               <path d="M360 0 V1920"/>
@@ -179,54 +300,75 @@ jobs:
 
             </g>
 
-            <circle cx="540"
-                    cy="500"
-                    r="120"
-                    fill="none"
-                    stroke="#5db4ff"
-                    stroke-width="5"
-                    opacity="0.65"/>
 
-            <circle cx="540"
-                    cy="500"
-                    r="75"
-                    fill="none"
-                    stroke="white"
-                    stroke-width="3"
-                    opacity="0.8"/>
+            <!-- AI Circle -->
+            <circle
+              cx="540"
+              cy="500"
+              r="135"
+              fill="#07111F"
+              stroke="#4DA3FF"
+              stroke-width="6"/>
 
-            <text x="540"
-                  y="510"
-                  text-anchor="middle"
-                  font-family="DejaVu Sans, Arial, sans-serif"
-                  font-size="42"
-                  font-weight="700"
-                  fill="white">
+
+            <circle
+              cx="540"
+              cy="500"
+              r="105"
+              fill="none"
+              stroke="#8BC7FF"
+              stroke-width="2"
+              opacity="0.7"/>
+
+
+            <!-- AI Text -->
+            <text
+              x="540"
+              y="515"
+              text-anchor="middle"
+              font-family="DejaVu Sans, Arial, sans-serif"
+              font-size="58"
+              font-weight="800"
+              fill="white">
+
               AI
+
             </text>
 
-            <text x="540"
-                  y="650"
-                  text-anchor="middle"
-                  font-family="DejaVu Sans, Arial, sans-serif"
-                  font-size="30"
-                  font-weight="700"
-                  fill="#9ccaff">
+
+            <!-- Label -->
+            <text
+              x="540"
+              y="675"
+              text-anchor="middle"
+              font-family="DejaVu Sans, Arial, sans-serif"
+              font-size="30"
+              font-weight="700"
+              letter-spacing="3"
+              fill="#9CCAFF">
+
               FREE AI TOOL
+
             </text>
 
+
+            <!-- Hook Text -->
             {''.join(text_elements)}
 
           </svg>
-          '''
+          """
 
           with open("scene1.svg", "w", encoding="utf-8") as f:
               f.write(svg)
 
-          print("SVG created successfully.")
+          print("Scene SVG created.")
           PY
 
-      - name: Render Visual
+
+      # --------------------------------------------------
+      # 9. Convert SVG to PNG
+      # --------------------------------------------------
+      - name: Render Scene Image
         run: |
           ffmpeg \
             -y \
@@ -234,20 +376,27 @@ jobs:
             -frames:v 1 \
             scene1.png
 
-      - name: Create Final Scene 1
+
+      # --------------------------------------------------
+      # 10. Create Video
+      # --------------------------------------------------
+      - name: Create Video With Voice
         run: |
           mkdir -p output
 
-          DURATION=$(cat duration.txt)
+          VOICE_DURATION=$(cat voice_duration.txt)
+
+          echo "Creating video..."
+          echo "Duration: $VOICE_DURATION seconds"
 
           ffmpeg \
             -y \
             -loop 1 \
             -i scene1.png \
-            -i voice.wav \
-            -t "$DURATION" \
+            -i audio/voice.wav \
+            -t "$VOICE_DURATION" \
             -r 30 \
-            -vf "scale=1080:1920,zoompan=z='min(zoom+0.0008,1.035)':d=120:s=1080x1920:fps=30,format=yuv420p" \
+            -vf "scale=1080:1920,zoompan=z='min(zoom+0.0007,1.04)':d=120:s=1080x1920:fps=30,format=yuv420p" \
             -map 0:v:0 \
             -map 1:a:0 \
             -c:v libx264 \
@@ -256,20 +405,37 @@ jobs:
             -c:a aac \
             -b:a 128k \
             -shortest \
-            output/scene1-final.mp4
+            output/scene1-piper.mp4
 
-      - name: Check Final Video
+
+      # --------------------------------------------------
+      # 11. Verify Video
+      # --------------------------------------------------
+      - name: Verify Output
         run: |
-          ls -lh output/scene1-final.mp4
+          echo "Final video:"
+
+          ls -lh output/scene1-piper.mp4
+
+          echo ""
+          echo "Video information:"
 
           ffprobe \
             -v error \
             -show_entries format=duration,size \
             -of default=noprint_wrappers=1 \
-            output/scene1-final.mp4
+            output/scene1-piper.mp4
 
-      - name: Upload Final Scene
+
+      # --------------------------------------------------
+      # 12. Upload Everything
+      # --------------------------------------------------
+      - name: Upload Scene 1 Files
         uses: actions/upload-artifact@v4
         with:
-          name: scene1-final
-          path: output/scene1-final.mp4
+          name: scene1-piper-test
+          path: |
+            output/scene1-piper.mp4
+            audio/voice.wav
+            tts_text.txt
+            voice_duration.txt
