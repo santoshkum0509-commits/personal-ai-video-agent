@@ -16,7 +16,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg git python3-pip
 
-      - name: Upgrade pip
+      - name: Upgrade Python packaging
         run: |
           python3 -m pip install --upgrade pip setuptools wheel
 
@@ -27,9 +27,20 @@ jobs:
             torchaudio \
             soundfile \
             numpy \
-            huggingface_hub \
+            scipy \
+            librosa \
+            einops \
+            jieba \
+            pypinyin \
+            omegaconf \
+            transformers \
+            safetensors \
+            accelerate \
+            ema-pytorch \
+            torchdiffeq \
             vocos \
-            f5-tts
+            f5-tts \
+            huggingface_hub
 
       - name: Download Hindi TTS inference code
         run: |
@@ -69,7 +80,7 @@ jobs:
           तो क्या आप उसे ट्राय करेंगे?
           """
 
-          print("Loading Hindi TTS model...")
+          print("Loading Hindi TTS model on CPU...")
 
           tts = HindiTTS(
               model_dir="../hindi-tts-model",
