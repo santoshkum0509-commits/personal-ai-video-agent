@@ -1,65 +1,23 @@
-name: Free Hindi TTS Test
-
-on:
-  workflow_dispatch:
-
-jobs:
-  tts-test:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install system dependencies
+      - name: Prepare Hindi TTS model files
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg git python3-pip
+          cp -f hindi-tts-model/model.pt tts-space/model.pt
+          
+          if [ -f hindi-tts-model/ref_audio.wav ]; then
+            cp -f hindi-tts-model/ref_audio.wav tts-space/ref_audio.wav
+          fi
+          
+          if [ -f hindi-tts-model/ref_text.txt ]; then
+            cp -f hindi-tts-model/ref_text.txt tts-space/ref_text.txt
+          fi
+          
+          cp -f hindi-tts-model/mel_basis.pt tts-space/mel_basis.pt
+          
+          mkdir -p tts-space/vocos
+          cp -f hindi-tts-model/vocos/config.yaml tts-space/vocos/config.yaml
+          cp -f hindi-tts-model/vocos/pytorch_model.bin tts-space/vocos/pytorch_model.bin
 
-      - name: Upgrade Python packaging
-        run: |
-          python3 -m pip install --upgrade pip setuptools wheel
-
-      - name: Install TTS dependencies
-        run: |
-          pip install \
-            torch \
-            torchaudio \
-            soundfile \
-            numpy \
-            scipy \
-            librosa \
-            einops \
-            jieba \
-            pypinyin \
-            omegaconf \
-            transformers \
-            safetensors \
-            accelerate \
-            ema-pytorch \
-            torchdiffeq \
-            vocos \
-            f5-tts \
-            huggingface_hub
-
-      - name: Download Hindi TTS inference code
-        run: |
-          git clone --depth 1 \
-            https://huggingface.co/spaces/5ivatej/hindi-tts-190M \
-            tts-space
-
-      - name: Download Hindi TTS model
-        run: |
-          python3 - <<'PY'
-          from huggingface_hub import snapshot_download
-
-          snapshot_download(
-              repo_id="5ivatej/hindi-tts-190M",
-              local_dir="hindi-tts-model"
-          )
-
-          print("Hindi TTS model downloaded successfully.")
-          PY
+          echo "TTS files prepared:"
+          find tts-space -maxdepth 2 -type f | sort
 
       - name: Generate Hindi voice
         run: |
@@ -68,11 +26,7 @@ jobs:
           cd tts-space
 
           python3 - <<'PY'
-          import sys
           import soundfile as sf
-
-          sys.path.insert(0, ".")
-
           from infer_core import HindiTTS
 
           text = """
@@ -82,10 +36,7 @@ jobs:
 
           print("Loading Hindi TTS model on CPU...")
 
-          tts = HindiTTS(
-              model_dir="../hindi-tts-model",
-              device="cpu"
-          )
+          tts = HindiTTS(device="cpu")
 
           print("Generating voice...")
 
@@ -105,42 +56,3 @@ jobs:
           print("Sample rate:", sr)
           print("Audio samples:", len(wave))
           PY
-
-      - name: Enhance voice
-        run: |
-          ffmpeg -y \
-            -i audio/voice-original.wav \
-            -af "highpass=f=70,equalizer=f=250:t=q:w=1:g=-1.5,equalizer=f=3000:t=q:w=1:g=1.5,acompressor=threshold=-18dB:ratio=2:attack=15:release=120:makeup=1.2,loudnorm=I=-16:TP=-1.5:LRA=7" \
-            -ar 24000 \
-            audio/voice-enhanced.wav
-
-      - name: Check generated audio
-        run: |
-          echo "===== ORIGINAL VOICE ====="
-
-          ffprobe \
-            -v error \
-            -show_entries format=duration \
-            -of default=noprint_wrappers=1:nokey=1 \
-            audio/voice-original.wav
-
-          echo "===== ENHANCED VOICE ====="
-
-          ffprobe \
-            -v error \
-            -show_entries format=duration \
-            -of default=noprint_wrappers=1:nokey=1 \
-            audio/voice-enhanced.wav
-
-          echo "===== FILES ====="
-
-          ls -lh audio/
-
-      - name: Upload generated voices
-        uses: actions/upload-artifact@v4
-        with:
-          name: hindi-tts-test
-          path: |
-            audio/voice-original.wav
-            audio/voice-enhanced.wav
-          if-no-files-found: error
