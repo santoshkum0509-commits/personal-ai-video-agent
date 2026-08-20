@@ -14,14 +14,24 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg python3-pip git
+          sudo apt-get install -y ffmpeg git python3-pip
 
-      - name: Install Python dependencies
+      - name: Upgrade pip
         run: |
-          python3 -m pip install --upgrade pip
-          pip install torch torchaudio soundfile huggingface_hub numpy
+          python3 -m pip install --upgrade pip setuptools wheel
 
-      - name: Download Hindi TTS demo inference code
+      - name: Install TTS dependencies
+        run: |
+          pip install \
+            torch \
+            torchaudio \
+            soundfile \
+            numpy \
+            huggingface_hub \
+            vocos \
+            f5-tts
+
+      - name: Download Hindi TTS inference code
         run: |
           git clone --depth 1 \
             https://huggingface.co/spaces/5ivatej/hindi-tts-190M \
@@ -37,7 +47,7 @@ jobs:
               local_dir="hindi-tts-model"
           )
 
-          print("Hindi TTS model downloaded.")
+          print("Hindi TTS model downloaded successfully.")
           PY
 
       - name: Generate Hindi voice
@@ -62,12 +72,17 @@ jobs:
           print("Loading Hindi TTS model...")
 
           tts = HindiTTS(
-              model_dir="../hindi-tts-model"
+              model_dir="../hindi-tts-model",
+              device="cpu"
           )
 
           print("Generating voice...")
 
-          sr, wave = tts.synth(text)
+          sr, wave = tts.synth(
+              text,
+              nfe_step=32,
+              seed=0
+          )
 
           sf.write(
               "../audio/voice-original.wav",
@@ -77,9 +92,10 @@ jobs:
 
           print("Voice generated successfully.")
           print("Sample rate:", sr)
+          print("Audio samples:", len(wave))
           PY
 
-      - name: Enhance voice with FFmpeg
+      - name: Enhance voice
         run: |
           ffmpeg -y \
             -i audio/voice-original.wav \
@@ -87,26 +103,33 @@ jobs:
             -ar 24000 \
             audio/voice-enhanced.wav
 
-      - name: Detect audio duration
+      - name: Check generated audio
         run: |
-          echo "Original:"
+          echo "===== ORIGINAL VOICE ====="
+
           ffprobe \
             -v error \
             -show_entries format=duration \
             -of default=noprint_wrappers=1:nokey=1 \
             audio/voice-original.wav
 
-          echo "Enhanced:"
+          echo "===== ENHANCED VOICE ====="
+
           ffprobe \
             -v error \
             -show_entries format=duration \
             -of default=noprint_wrappers=1:nokey=1 \
             audio/voice-enhanced.wav
 
-      - name: Upload voice files
+          echo "===== FILES ====="
+
+          ls -lh audio/
+
+      - name: Upload generated voices
         uses: actions/upload-artifact@v4
         with:
           name: hindi-tts-test
           path: |
             audio/voice-original.wav
             audio/voice-enhanced.wav
+          if-no-files-found: error
