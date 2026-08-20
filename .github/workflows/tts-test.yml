@@ -1,0 +1,112 @@
+name: Free Hindi TTS Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  tts-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg python3-pip git
+
+      - name: Install Python dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          pip install torch torchaudio soundfile huggingface_hub numpy
+
+      - name: Download Hindi TTS demo inference code
+        run: |
+          git clone --depth 1 \
+            https://huggingface.co/spaces/5ivatej/hindi-tts-190M \
+            tts-space
+
+      - name: Download Hindi TTS model
+        run: |
+          python3 - <<'PY'
+          from huggingface_hub import snapshot_download
+
+          snapshot_download(
+              repo_id="5ivatej/hindi-tts-190M",
+              local_dir="hindi-tts-model"
+          )
+
+          print("Hindi TTS model downloaded.")
+          PY
+
+      - name: Generate Hindi voice
+        run: |
+          mkdir -p audio
+
+          cd tts-space
+
+          python3 - <<'PY'
+          import sys
+          import soundfile as sf
+
+          sys.path.insert(0, ".")
+
+          from infer_core import HindiTTS
+
+          text = """
+          अगर आपको एक ऐसा ए आई टूल मिल जाए जो बिना पैसे दिए आपका काम मिनट्स में कर दे,
+          तो क्या आप उसे ट्राय करेंगे?
+          """
+
+          print("Loading Hindi TTS model...")
+
+          tts = HindiTTS(
+              model_dir="../hindi-tts-model"
+          )
+
+          print("Generating voice...")
+
+          sr, wave = tts.synth(text)
+
+          sf.write(
+              "../audio/voice-original.wav",
+              wave,
+              sr
+          )
+
+          print("Voice generated successfully.")
+          print("Sample rate:", sr)
+          PY
+
+      - name: Enhance voice with FFmpeg
+        run: |
+          ffmpeg -y \
+            -i audio/voice-original.wav \
+            -af "highpass=f=70,equalizer=f=250:t=q:w=1:g=-1.5,equalizer=f=3000:t=q:w=1:g=1.5,acompressor=threshold=-18dB:ratio=2:attack=15:release=120:makeup=1.2,loudnorm=I=-16:TP=-1.5:LRA=7" \
+            -ar 24000 \
+            audio/voice-enhanced.wav
+
+      - name: Detect audio duration
+        run: |
+          echo "Original:"
+          ffprobe \
+            -v error \
+            -show_entries format=duration \
+            -of default=noprint_wrappers=1:nokey=1 \
+            audio/voice-original.wav
+
+          echo "Enhanced:"
+          ffprobe \
+            -v error \
+            -show_entries format=duration \
+            -of default=noprint_wrappers=1:nokey=1 \
+            audio/voice-enhanced.wav
+
+      - name: Upload voice files
+        uses: actions/upload-artifact@v4
+        with:
+          name: hindi-tts-test
+          path: |
+            audio/voice-original.wav
+            audio/voice-enhanced.wav
