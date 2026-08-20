@@ -8,55 +8,46 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
-      # --------------------------------------------------
-      # 1. Checkout repository
-      # --------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
-
-      # --------------------------------------------------
-      # 2. Install required tools
-      # --------------------------------------------------
       - name: Install FFmpeg and dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg python3-pip wget
+          sudo apt-get install -y ffmpeg git python3-pip
 
-
-      # --------------------------------------------------
-      # 3. Install Piper TTS
-      # --------------------------------------------------
-      - name: Install Piper TTS
+      - name: Upgrade Python packaging
         run: |
-          python3 -m pip install --upgrade pip
-          pip install piper-tts
+          python3 -m pip install --upgrade pip setuptools wheel
 
-
-      # --------------------------------------------------
-      # 4. Download Hindi voice model
-      # --------------------------------------------------
-      - name: Download Hindi Voice Model
+      - name: Install Hindi TTS dependencies
         run: |
-          mkdir -p models
+          pip install \
+            torch \
+            torchaudio \
+            soundfile \
+            numpy \
+            scipy \
+            librosa \
+            einops \
+            jieba \
+            pypinyin \
+            omegaconf \
+            transformers \
+            safetensors \
+            accelerate \
+            ema-pytorch \
+            torchdiffeq \
+            vocos \
+            f5-tts \
+            huggingface_hub
 
-          wget -q \
-            https://huggingface.co/rhasspy/piper-voices/resolve/main/hi/hi_IN/pratham/medium/hi_IN-pratham-medium.onnx \
-            -O models/hi_IN-pratham-medium.onnx
+      - name: Download Hindi TTS inference code
+        run: |
+          git clone --depth 1 \
+            https://huggingface.co/spaces/5ivatej/hindi-tts-190M \
+            tts-space
 
-          wget -q \
-            https://huggingface.co/rhasspy/piper-voices/resolve/main/hi/hi_IN/pratham/medium/hi_IN-pratham-medium.onnx.json \
-            -O models/hi_IN-pratham-medium.onnx.json
-
-          echo "Voice model downloaded."
-
-          ls -lh models/
-
-
-      # --------------------------------------------------
-      # 5. Read Scene 1
-      # --------------------------------------------------
       - name: Read Scene 1
         run: |
           python3 - <<'PY'
@@ -70,11 +61,9 @@ jobs:
           print("Original Scene Text:")
           print(text)
 
-          # Save original text
           with open("original_text.txt", "w", encoding="utf-8") as f:
               f.write(text)
 
-          # Hindi-friendly TTS pronunciation
           tts_text = text
 
           replacements = {
@@ -96,27 +85,55 @@ jobs:
           print(tts_text)
           PY
 
-
-      # --------------------------------------------------
-      # 6. Generate Natural Hindi Voice
-      # --------------------------------------------------
       - name: Generate Hindi Voiceover
+        working-directory: tts-space
         run: |
-          mkdir -p audio
+          mkdir -p ../audio
 
-          cat tts_text.txt | \
-            piper \
-              --model models/hi_IN-pratham-medium.onnx \
-              --output_file audio/voice.wav
+          python3 - <<'PY'
+          import soundfile as sf
+          from infer_core import HindiTTS
 
-          echo "Voice generated successfully."
+          with open("../tts_text.txt", "r", encoding="utf-8") as f:
+              text = f.read().strip()
 
+          print("Loading Hindi TTS 190M on CPU...")
+
+          tts = HindiTTS(device="cpu")
+
+          print("Generating voice...")
+          print("Text:", text)
+
+          sr, wave = tts.synth(
+              text,
+              nfe_step=32,
+              seed=0
+          )
+
+          sf.write(
+              "../audio/voice-original.wav",
+              wave,
+              sr
+          )
+
+          print("Voice generated successfully.")
+          print("Sample rate:", sr)
+          print("Samples:", len(wave))
+          PY
+
+      - name: Enhance Voice
+        run: |
+          ffmpeg -y \
+            -i audio/voice-original.wav \
+            -af "highpass=f=70,equalizer=f=250:t=q:w=1:g=-1.5,equalizer=f=3000:t=q:w=1:g=1.5,acompressor=threshold=-18dB:ratio=2:attack=15:release=120:makeup=1.2,loudnorm=I=-16:TP=-1.5:LRA=7" \
+            -ar 24000 \
+            audio/voice.wav
+
+          echo "Enhanced voice created."
+
+          ls -lh audio/voice-original.wav
           ls -lh audio/voice.wav
 
-
-      # --------------------------------------------------
-      # 7. Detect Voice Duration
-      # --------------------------------------------------
       - name: Detect Voice Duration
         run: |
           VOICE_DURATION=$(ffprobe \
@@ -129,11 +146,7 @@ jobs:
 
           echo "$VOICE_DURATION" > voice_duration.txt
 
-
-      # --------------------------------------------------
-      # 8. Create Professional SVG Visual
-      # --------------------------------------------------
-      - name: Create Scene Visual
+      - name: Create Professional SVG Visual
         run: |
           python3 - <<'PY'
           import html
@@ -144,7 +157,6 @@ jobs:
 
           text = data.get("onScreenText", "")
 
-          # Split text into readable lines
           words = text.split()
 
           lines = []
@@ -169,7 +181,6 @@ jobs:
           line_gap = 82
 
           for i, line in enumerate(lines):
-
               y = start_y + (i * line_gap)
 
               text_elements.append(
@@ -185,9 +196,7 @@ jobs:
                     stroke="#000000"
                     stroke-width="3"
                     paint-order="stroke">
-
                     {html.escape(line)}
-
                   </text>
                   """
               )
@@ -252,31 +261,23 @@ jobs:
 
             </defs>
 
-
-            <!-- Background -->
             <rect
               width="1080"
               height="1920"
               fill="url(#bg)"/>
 
-
-            <!-- Blue glow -->
             <circle
               cx="150"
               cy="350"
               r="550"
               fill="url(#glowBlue)"/>
 
-
-            <!-- Purple glow -->
             <circle
               cx="950"
               cy="1500"
               r="650"
               fill="url(#glowPurple)"/>
 
-
-            <!-- Grid -->
             <g
               opacity="0.10"
               stroke="white"
@@ -300,8 +301,6 @@ jobs:
 
             </g>
 
-
-            <!-- AI Circle -->
             <circle
               cx="540"
               cy="500"
@@ -309,7 +308,6 @@ jobs:
               fill="#07111F"
               stroke="#4DA3FF"
               stroke-width="6"/>
-
 
             <circle
               cx="540"
@@ -320,8 +318,6 @@ jobs:
               stroke-width="2"
               opacity="0.7"/>
 
-
-            <!-- AI Text -->
             <text
               x="540"
               y="515"
@@ -330,13 +326,9 @@ jobs:
               font-size="58"
               font-weight="800"
               fill="white">
-
               AI
-
             </text>
 
-
-            <!-- Label -->
             <text
               x="540"
               y="675"
@@ -346,13 +338,9 @@ jobs:
               font-weight="700"
               letter-spacing="3"
               fill="#9CCAFF">
-
               FREE AI TOOL
-
             </text>
 
-
-            <!-- Hook Text -->
             {''.join(text_elements)}
 
           </svg>
@@ -364,10 +352,6 @@ jobs:
           print("Scene SVG created.")
           PY
 
-
-      # --------------------------------------------------
-      # 9. Convert SVG to PNG
-      # --------------------------------------------------
       - name: Render Scene Image
         run: |
           ffmpeg \
@@ -376,17 +360,13 @@ jobs:
             -frames:v 1 \
             scene1.png
 
-
-      # --------------------------------------------------
-      # 10. Create Video
-      # --------------------------------------------------
-      - name: Create Video With Voice
+      - name: Create Video With Enhanced Voice
         run: |
           mkdir -p output
 
           VOICE_DURATION=$(cat voice_duration.txt)
 
-          echo "Creating video..."
+          echo "Creating final video..."
           echo "Duration: $VOICE_DURATION seconds"
 
           ffmpeg \
@@ -405,17 +385,12 @@ jobs:
             -c:a aac \
             -b:a 128k \
             -shortest \
-            output/scene1-piper.mp4
+            output/scene1-final.mp4
 
-
-      # --------------------------------------------------
-      # 11. Verify Video
-      # --------------------------------------------------
       - name: Verify Output
         run: |
           echo "Final video:"
-
-          ls -lh output/scene1-piper.mp4
+          ls -lh output/scene1-final.mp4
 
           echo ""
           echo "Video information:"
@@ -424,18 +399,15 @@ jobs:
             -v error \
             -show_entries format=duration,size \
             -of default=noprint_wrappers=1 \
-            output/scene1-piper.mp4
+            output/scene1-final.mp4
 
-
-      # --------------------------------------------------
-      # 12. Upload Everything
-      # --------------------------------------------------
       - name: Upload Scene 1 Files
         uses: actions/upload-artifact@v4
         with:
-          name: scene1-piper-test
+          name: scene1-final-test
           path: |
-            output/scene1-piper.mp4
+            output/scene1-final.mp4
+            audio/voice-original.wav
             audio/voice.wav
             tts_text.txt
             voice_duration.txt
