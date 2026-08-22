@@ -127,6 +127,7 @@ jobs:
             -i audio/voice-original.wav \
             -af "highpass=f=70,equalizer=f=250:t=q:w=1:g=-1.5,equalizer=f=3000:t=q:w=1:g=1.5,acompressor=threshold=-18dB:ratio=2:attack=15:release=120:makeup=1.2,loudnorm=I=-16:TP=-1.5:LRA=7" \
             -ar 24000 \
+            -ac 1 \
             audio/voice.wav
 
           echo "Enhanced voice created."
@@ -156,16 +157,7 @@ jobs:
             -f lavfi -i "sine=frequency=196:sample_rate=24000" \
             -f lavfi -i "sine=frequency=246.94:sample_rate=24000" \
             -f lavfi -i "sine=frequency=293.66:sample_rate=24000" \
-            -filter_complex "
-              [0:a]volume=0.045,lowpass=f=900[a0];
-              [1:a]volume=0.032,lowpass=f=1200[a1];
-              [2:a]volume=0.022,lowpass=f=1500[a2];
-              [a0][a1][a2]amix=inputs=3:duration=longest,
-              tremolo=f=0.18:d=0.35,
-              aecho=0.8:0.7:600:0.18,
-              afade=t=in:st=0:d=1,
-              loudnorm=I=-24:TP=-2:LRA=7
-            " \
+            -filter_complex "[0:a]volume=0.045,lowpass=f=900[a0];[1:a]volume=0.032,lowpass=f=1200[a1];[2:a]volume=0.022,lowpass=f=1500[a2];[a0][a1][a2]amix=inputs=3:duration=longest,tremolo=f=0.18:d=0.35,aecho=0.8:0.7:600:0.18,afade=t=in:st=0:d=1,loudnorm=I=-24:TP=-2:LRA=7" \
             -t 60 \
             -ar 24000 \
             -ac 1 \
@@ -406,34 +398,7 @@ jobs:
             -stream_loop -1 \
             -i audio/background-music.wav \
             -t "$VOICE_DURATION" \
-            -filter_complex "
-              [1:a]volume=1.0[voice];
-
-              [2:a]volume=0.10[music];
-
-              [music][voice]
-              sidechaincompress=
-              threshold=0.025:
-              ratio=8:
-              attack=20:
-              release=350:
-              makeup=1
-              [musicduck];
-
-              [voice][musicduck]
-              amix=
-              inputs=2:
-              duration=first:
-              dropout_transition=2
-              [mixed];
-
-              [mixed]
-              loudnorm=
-              I=-16:
-              TP=-1.5:
-              LRA=7
-              [aout]
-            " \
+            -filter_complex "[1:a]volume=1.0[voice_main];[2:a]volume=0.10[music_main];[music_main]afade=t=in:st=0:d=0.8[music_in];[music_in]afade=t=out:st=2.5:d=1.5[music_fade];[voice_main][music_fade]amix=inputs=2:duration=first:dropout_transition=2[mix];[mix]loudnorm=I=-16:TP=-1.5:LRA=7[aout]" \
             -r 30 \
             -vf "scale=1080:1920,zoompan=z='min(zoom+0.0007,1.04)':d=120:s=1080x1920:fps=30,format=yuv420p" \
             -map 0:v:0 \
