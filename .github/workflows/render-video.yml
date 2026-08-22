@@ -146,6 +146,35 @@ jobs:
 
           echo "$VOICE_DURATION" > voice_duration.txt
 
+      - name: Create Free Background Music
+        run: |
+          mkdir -p audio
+
+          echo "Creating free generated background music..."
+
+          ffmpeg -y \
+            -f lavfi -i "sine=frequency=196:sample_rate=24000" \
+            -f lavfi -i "sine=frequency=246.94:sample_rate=24000" \
+            -f lavfi -i "sine=frequency=293.66:sample_rate=24000" \
+            -filter_complex "
+              [0:a]volume=0.045,lowpass=f=900[a0];
+              [1:a]volume=0.032,lowpass=f=1200[a1];
+              [2:a]volume=0.022,lowpass=f=1500[a2];
+              [a0][a1][a2]amix=inputs=3:duration=longest,
+              tremolo=f=0.18:d=0.35,
+              aecho=0.8:0.7:600:0.18,
+              afade=t=in:st=0:d=1,
+              loudnorm=I=-24:TP=-2:LRA=7
+            " \
+            -t 60 \
+            -ar 24000 \
+            -ac 1 \
+            audio/background-music.wav
+
+          echo "Background music created."
+
+          ls -lh audio/background-music.wav
+
       - name: Create Professional SVG Visual
         run: |
           python3 - <<'PY'
@@ -360,7 +389,7 @@ jobs:
             -frames:v 1 \
             scene1.png
 
-      - name: Create Video With Enhanced Voice
+      - name: Create Video With Voice And Background Music
         run: |
           mkdir -p output
 
@@ -374,11 +403,41 @@ jobs:
             -loop 1 \
             -i scene1.png \
             -i audio/voice.wav \
+            -stream_loop -1 \
+            -i audio/background-music.wav \
             -t "$VOICE_DURATION" \
+            -filter_complex "
+              [1:a]volume=1.0[voice];
+
+              [2:a]volume=0.10[music];
+
+              [music][voice]
+              sidechaincompress=
+              threshold=0.025:
+              ratio=8:
+              attack=20:
+              release=350:
+              makeup=1
+              [musicduck];
+
+              [voice][musicduck]
+              amix=
+              inputs=2:
+              duration=first:
+              dropout_transition=2
+              [mixed];
+
+              [mixed]
+              loudnorm=
+              I=-16:
+              TP=-1.5:
+              LRA=7
+              [aout]
+            " \
             -r 30 \
             -vf "scale=1080:1920,zoompan=z='min(zoom+0.0007,1.04)':d=120:s=1080x1920:fps=30,format=yuv420p" \
             -map 0:v:0 \
-            -map 1:a:0 \
+            -map "[aout]" \
             -c:v libx264 \
             -preset veryfast \
             -pix_fmt yuv420p \
@@ -393,6 +452,10 @@ jobs:
           ls -lh output/scene1-final.mp4
 
           echo ""
+          echo "Background music:"
+          ls -lh audio/background-music.wav
+
+          echo ""
           echo "Video information:"
 
           ffprobe \
@@ -404,10 +467,11 @@ jobs:
       - name: Upload Scene 1 Files
         uses: actions/upload-artifact@v4
         with:
-          name: scene1-final-test
+          name: scene1-final-music-test
           path: |
             output/scene1-final.mp4
             audio/voice-original.wav
             audio/voice.wav
+            audio/background-music.wav
             tts_text.txt
             voice_duration.txt
