@@ -1,54 +1,56 @@
 {
   "project": {
-    "title": "QWEN: Aplikasi AI Gratis yang Lagi Viral",
+    "title": "QWEN AI",
+    "topic": "QWEN: Free AI Tool",
+    "language": "Hinglish",
     "format": "9:16",
-    "language": "Hindi",
-    "targetDuration": 30
+    "targetDuration": 25,
+    "style": "viral-tech-short"
   },
   "scenes": [
     {
       "number": 1,
-      "duration": 4,
+      "duration": 5,
       "type": "HOOK",
-      "voiceover": "Agar aapko ek aisa AI tool mil jaye jo bina paise diye aapka kaam minutes mein kar de, to kya aap use try karenge?",
-      "onScreenText": "Free AI tool jo aapka kaam minutes mein kar de?",
-      "visualPrompt": "Create a vertical 9:16 attention-grabbing visual related to QWEN, a viral free AI tool.",
-      "transition": "FAST_CUT"
+      "voiceover": "Socho, agar ek AI tool aapka kaam minutes mein kar de, aur uske liye paise bhi na dene pade. Try karoge?",
+      "onScreenText": "FREE AI TOOL?!",
+      "visualPrompt": "Show a smartphone with a futuristic AI assistant interface, a user reacting with surprise, bold social-media style composition, dynamic light streaks, premium technology advertisement look, vertical 9:16.",
+      "transition": "FAST_ZOOM"
     },
     {
       "number": 2,
-      "duration": 6,
+      "duration": 5,
       "type": "INTRO",
-      "voiceover": "Is AI tool ka naam QWEN hai, aur ye abhi kaafi viral ho raha hai.",
-      "onScreenText": "QWEN AI",
-      "visualPrompt": "Create a modern vertical 9:16 AI technology visual representing QWEN AI, futuristic interface, mobile-first social media style.",
-      "transition": "FAST_CUT"
+      "voiceover": "Iska naam hai QWEN, aur ye AI space mein kaafi attention grab kar raha hai.",
+      "onScreenText": "Meet QWEN AI",
+      "visualPrompt": "Create a premium vertical 9:16 AI product introduction visual. Show a futuristic chatbot interface on a smartphone and laptop, clean modern UI, QWEN AI branding concept, realistic lighting, high-end tech commercial style.",
+      "transition": "SLIDE_LEFT"
     },
     {
       "number": 3,
-      "duration": 7,
-      "type": "FEATURE",
-      "voiceover": "Sabse interesting baat ye hai ki aap isse writing, ideas aur kai daily tasks ke liye use kar sakte hain.",
-      "onScreenText": "Writing • Ideas • Daily Tasks",
-      "visualPrompt": "Create a vertical 9:16 visual showing AI helping with writing, ideas and everyday productivity tasks.",
-      "transition": "SMOOTH_CUT"
-    },
-    {
-      "number": 4,
       "duration": 6,
-      "type": "VALUE",
-      "voiceover": "Agar aap AI tools explore kar rahe hain, to QWEN ko ek baar try karna worth hai.",
-      "onScreenText": "AI Tools Explore Kar Rahe Ho?",
-      "visualPrompt": "Create a premium vertical 9:16 social media visual showing a person discovering a powerful AI productivity tool.",
+      "type": "FEATURES",
+      "voiceover": "Aap isse writing, ideas, research aur daily productivity jaise kaamon mein use kar sakte ho.",
+      "onScreenText": "Writing • Ideas • Research",
+      "visualPrompt": "Show multiple realistic AI productivity use cases in one vertical composition: writing document, research search, brainstorming ideas and productivity dashboard. Modern clean UI cards, subtle motion-ready layout, premium tech visual.",
       "transition": "FAST_CUT"
     },
     {
-      "number": 5,
+      "number": 4,
       "duration": 5,
+      "type": "VALUE",
+      "voiceover": "Agar aap AI tools explore karte ho, to QWEN ko definitely ek baar test karna chahiye.",
+      "onScreenText": "Worth Trying?",
+      "visualPrompt": "Show a person using an AI assistant on a laptop with multiple useful results appearing on screen, realistic workspace, cinematic lighting, premium technology creator aesthetic, vertical 9:16.",
+      "transition": "PUSH_IN"
+    },
+    {
+      "number": 5,
+      "duration": 4,
       "type": "CTA",
-      "voiceover": "Aise hi useful AI tools ke liye follow karna mat bhoolna.",
-      "onScreenText": "Follow For More AI Tools",
-      "visualPrompt": "Create a vertical 9:16 high-energy social media follow call-to-action visual related to AI tools.",
+      "voiceover": "Aise hi useful AI tools ke liye follow karo. Agla tool aur bhi interesting hai.",
+      "onScreenText": "FOLLOW FOR MORE AI",
+      "visualPrompt": "Create a high-energy vertical social media ending screen with a smartphone, AI icons, glowing interface elements and a strong follow call-to-action. Premium creator aesthetic, clean composition, dynamic lighting.",
       "transition": "ZOOM_OUT"
     }
   ]
