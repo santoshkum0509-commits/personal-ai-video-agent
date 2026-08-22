@@ -42,383 +42,505 @@ jobs:
             f5-tts \
             huggingface_hub
 
-      - name: Download Hindi TTS inference code
+      - name: Download Hindi TTS
         run: |
           git clone --depth 1 \
             https://huggingface.co/spaces/5ivatej/hindi-tts-190M \
             tts-space
 
-      - name: Read Scene 1
+      - name: Prepare project folders
+        run: |
+          mkdir -p audio
+          mkdir -p scenes
+          mkdir -p output
+          mkdir -p work
+
+      - name: Validate scenes.json
         run: |
           python3 - <<'PY'
           import json
 
-          with open("scene1.json", "r", encoding="utf-8") as f:
+          with open("scenes.json", "r", encoding="utf-8") as f:
               data = json.load(f)
 
-          text = data.get("onScreenText", "")
+          scenes = data.get("scenes", [])
 
-          print("Original Scene Text:")
-          print(text)
+          if not scenes:
+              raise RuntimeError("No scenes found in scenes.json")
 
-          with open("original_text.txt", "w", encoding="utf-8") as f:
-              f.write(text)
+          print(f"Total scenes found: {len(scenes)}")
 
-          tts_text = text
-
-          replacements = {
-              "AI tool": "ए आई टूल",
-              "AI": "ए आई",
-              "minutes": "मिनट्स",
-              "try": "ट्राय",
-              "tool": "टूल"
-          }
-
-          for old, new in replacements.items():
-              tts_text = tts_text.replace(old, new)
-
-          with open("tts_text.txt", "w", encoding="utf-8") as f:
-              f.write(tts_text)
-
-          print("")
-          print("TTS Text:")
-          print(tts_text)
+          for scene in scenes:
+              print(
+                  f"Scene {scene.get('number')}: "
+                  f"{scene.get('type')} - "
+                  f"{scene.get('duration')} sec"
+              )
           PY
 
-      - name: Generate Hindi Voiceover
+      - name: Generate all Hindi voiceovers
         working-directory: tts-space
         run: |
-          mkdir -p ../audio
-
           python3 - <<'PY'
+          import json
+          import os
           import soundfile as sf
+
           from infer_core import HindiTTS
 
-          with open("../tts_text.txt", "r", encoding="utf-8") as f:
-              text = f.read().strip()
+          ROOT = ".."
+
+          with open(
+              os.path.join(ROOT, "scenes.json"),
+              "r",
+              encoding="utf-8"
+          ) as f:
+              data = json.load(f)
+
+          scenes = data["scenes"]
 
           print("Loading Hindi TTS 190M on CPU...")
 
           tts = HindiTTS(device="cpu")
 
-          print("Generating voice...")
-          print("Text:", text)
+          for scene in scenes:
 
-          sr, wave = tts.synth(
-              text,
-              nfe_step=32,
-              seed=0
-          )
+              number = int(scene["number"])
+              text = scene["voiceover"].strip()
 
-          sf.write(
-              "../audio/voice-original.wav",
-              wave,
-              sr
-          )
+              print("")
+              print("=" * 60)
+              print(f"Generating voice for Scene {number}")
+              print(text)
+              print("=" * 60)
 
-          print("Voice generated successfully.")
-          print("Sample rate:", sr)
-          print("Samples:", len(wave))
+              replacements = {
+                  "AI tool": "ए आई टूल",
+                  "AI": "ए आई",
+                  "QWEN": "क्वेन",
+                  "Qwen": "क्वेन",
+                  "minutes": "मिनट्स",
+                  "minute": "मिनट",
+                  "try": "ट्राय",
+                  "tool": "टूल",
+                  "follow": "फॉलो",
+                  "viral": "वायरल"
+              }
+
+              tts_text = text
+
+              for old, new in replacements.items():
+                  tts_text = tts_text.replace(old, new)
+
+              text_file = os.path.join(
+                  ROOT,
+                  "scenes",
+                  f"scene{number}-text.txt"
+              )
+
+              audio_file = os.path.join(
+                  ROOT,
+                  "scenes",
+                  f"scene{number}-voice-original.wav"
+              )
+
+              with open(
+                  text_file,
+                  "w",
+                  encoding="utf-8"
+              ) as f:
+                  f.write(tts_text)
+
+              sr, wave = tts.synth(
+                  tts_text,
+                  nfe_step=32,
+                  seed=number
+              )
+
+              sf.write(
+                  audio_file,
+                  wave,
+                  sr
+              )
+
+              print(
+                  f"Scene {number} voice generated successfully."
+              )
+
+          print("")
+          print("ALL VOICEOVERS GENERATED SUCCESSFULLY.")
           PY
 
-      - name: Enhance Voice
+      - name: Enhance all voiceovers
         run: |
-          ffmpeg -y \
-            -i audio/voice-original.wav \
-            -af "highpass=f=70,equalizer=f=250:t=q:w=1:g=-1.5,equalizer=f=3000:t=q:w=1:g=1.5,acompressor=threshold=-18dB:ratio=2:attack=15:release=120:makeup=1.2,loudnorm=I=-16:TP=-1.5:LRA=7" \
-            -ar 24000 \
-            -ac 1 \
-            audio/voice.wav
+          for input in scenes/scene*-voice-original.wav
+          do
+            number=$(echo "$input" | sed -E 's/.*scene([0-9]+)-voice-original.wav/\1/')
 
-          echo "Enhanced voice created."
+            output="scenes/scene${number}-voice.wav"
 
-          ls -lh audio/voice-original.wav
-          ls -lh audio/voice.wav
+            echo "Enhancing Scene $number..."
 
-      - name: Detect Voice Duration
+            ffmpeg -y \
+              -i "$input" \
+              -af "highpass=f=70,equalizer=f=250:t=q:w=1:g=-1.5,equalizer=f=3000:t=q:w=1:g=1.5,acompressor=threshold=-18dB:ratio=2:attack=15:release=120:makeup=1.2,loudnorm=I=-16:TP=-1.5:LRA=7" \
+              -ar 24000 \
+              -ac 1 \
+              "$output"
+
+          done
+
+          echo "All voiceovers enhanced."
+
+      - name: Create free background music
         run: |
-          VOICE_DURATION=$(ffprobe \
-            -v error \
-            -show_entries format=duration \
-            -of default=noprint_wrappers=1:nokey=1 \
-            audio/voice.wav)
-
-          echo "Voice duration: $VOICE_DURATION seconds"
-
-          echo "$VOICE_DURATION" > voice_duration.txt
-
-      - name: Create Free Background Music
-        run: |
-          mkdir -p audio
-
-          echo "Creating free generated background music..."
-
           ffmpeg -y \
             -f lavfi -i "sine=frequency=196:sample_rate=24000" \
             -f lavfi -i "sine=frequency=246.94:sample_rate=24000" \
             -f lavfi -i "sine=frequency=293.66:sample_rate=24000" \
             -filter_complex "[0:a]volume=0.045,lowpass=f=900[a0];[1:a]volume=0.032,lowpass=f=1200[a1];[2:a]volume=0.022,lowpass=f=1500[a2];[a0][a1][a2]amix=inputs=3:duration=longest,tremolo=f=0.18:d=0.35,aecho=0.8:0.7:600:0.18,afade=t=in:st=0:d=1,loudnorm=I=-24:TP=-2:LRA=7" \
-            -t 60 \
+            -t 300 \
             -ar 24000 \
             -ac 1 \
             audio/background-music.wav
 
-          echo "Background music created."
+          echo "Free background music generated."
 
-          ls -lh audio/background-music.wav
-
-      - name: Create Professional SVG Visual
+      - name: Generate visuals for all scenes
         run: |
           python3 - <<'PY'
-          import html
           import json
+          import html
+          import os
 
-          with open("scene1.json", "r", encoding="utf-8") as f:
+          with open(
+              "scenes.json",
+              "r",
+              encoding="utf-8"
+          ) as f:
               data = json.load(f)
 
-          text = data.get("onScreenText", "")
+          scenes = data["scenes"]
 
-          words = text.split()
+          for scene in scenes:
 
-          lines = []
-          current = ""
+              number = int(scene["number"])
 
-          for word in words:
-              test = (current + " " + word).strip()
-
-              if len(test) > 30:
-                  if current:
-                      lines.append(current)
-                  current = word
-              else:
-                  current = test
-
-          if current:
-              lines.append(current)
-
-          text_elements = []
-
-          start_y = 850
-          line_gap = 82
-
-          for i, line in enumerate(lines):
-              y = start_y + (i * line_gap)
-
-              text_elements.append(
-                  f"""
-                  <text
-                    x="540"
-                    y="{y}"
-                    text-anchor="middle"
-                    font-family="DejaVu Sans, Arial, sans-serif"
-                    font-size="50"
-                    font-weight="700"
-                    fill="white"
-                    stroke="#000000"
-                    stroke-width="3"
-                    paint-order="stroke">
-                    {html.escape(line)}
-                  </text>
-                  """
+              text = scene.get(
+                  "onScreenText",
+                  ""
               )
 
-          svg = f"""
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="1080"
-            height="1920"
-            viewBox="0 0 1080 1920">
+              words = text.split()
 
-            <defs>
+              lines = []
+              current = ""
 
-              <linearGradient
-                id="bg"
-                x1="0"
-                y1="0"
-                x2="1"
-                y2="1">
+              for word in words:
 
-                <stop
-                  offset="0%"
-                  stop-color="#050B18"/>
+                  test = (
+                      current + " " + word
+                  ).strip()
 
-                <stop
-                  offset="50%"
-                  stop-color="#102D4F"/>
+                  if len(test) > 27:
 
-                <stop
-                  offset="100%"
-                  stop-color="#020409"/>
+                      if current:
+                          lines.append(current)
 
-              </linearGradient>
+                      current = word
 
-              <radialGradient id="glowBlue">
+                  else:
+                      current = test
 
-                <stop
-                  offset="0%"
-                  stop-color="#168CFF"
-                  stop-opacity="0.55"/>
+              if current:
+                  lines.append(current)
 
-                <stop
-                  offset="100%"
-                  stop-color="#168CFF"
-                  stop-opacity="0"/>
+              text_elements = []
 
-              </radialGradient>
+              start_y = 850
+              line_gap = 82
 
-              <radialGradient id="glowPurple">
+              for i, line in enumerate(lines):
 
-                <stop
-                  offset="0%"
-                  stop-color="#7B4DFF"
-                  stop-opacity="0.40"/>
+                  y = start_y + (
+                      i * line_gap
+                  )
 
-                <stop
-                  offset="100%"
-                  stop-color="#7B4DFF"
-                  stop-opacity="0"/>
+                  text_elements.append(
+                      f"""
+                      <text
+                        x="540"
+                        y="{y}"
+                        text-anchor="middle"
+                        font-family="DejaVu Sans, Arial, sans-serif"
+                        font-size="50"
+                        font-weight="700"
+                        fill="white"
+                        stroke="#000000"
+                        stroke-width="3"
+                        paint-order="stroke">
+                        {html.escape(line)}
+                      </text>
+                      """
+                  )
 
-              </radialGradient>
+              scene_type = html.escape(
+                  scene.get("type", "AI")
+              )
 
-            </defs>
+              svg = f"""
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="1080"
+                height="1920"
+                viewBox="0 0 1080 1920">
 
-            <rect
-              width="1080"
-              height="1920"
-              fill="url(#bg)"/>
+                <defs>
 
-            <circle
-              cx="150"
-              cy="350"
-              r="550"
-              fill="url(#glowBlue)"/>
+                  <linearGradient
+                    id="bg"
+                    x1="0"
+                    y1="0"
+                    x2="1"
+                    y2="1">
 
-            <circle
-              cx="950"
-              cy="1500"
-              r="650"
-              fill="url(#glowPurple)"/>
+                    <stop
+                      offset="0%"
+                      stop-color="#050B18"/>
 
-            <g
-              opacity="0.10"
-              stroke="white"
-              stroke-width="2">
+                    <stop
+                      offset="50%"
+                      stop-color="#102D4F"/>
 
-              <path d="M0 200 H1080"/>
-              <path d="M0 400 H1080"/>
-              <path d="M0 600 H1080"/>
-              <path d="M0 800 H1080"/>
-              <path d="M0 1000 H1080"/>
-              <path d="M0 1200 H1080"/>
-              <path d="M0 1400 H1080"/>
-              <path d="M0 1600 H1080"/>
-              <path d="M0 1800 H1080"/>
+                    <stop
+                      offset="100%"
+                      stop-color="#020409"/>
 
-              <path d="M180 0 V1920"/>
-              <path d="M360 0 V1920"/>
-              <path d="M540 0 V1920"/>
-              <path d="M720 0 V1920"/>
-              <path d="M900 0 V1920"/>
+                  </linearGradient>
 
-            </g>
+                  <radialGradient id="glowBlue">
+                    <stop
+                      offset="0%"
+                      stop-color="#168CFF"
+                      stop-opacity="0.55"/>
 
-            <circle
-              cx="540"
-              cy="500"
-              r="135"
-              fill="#07111F"
-              stroke="#4DA3FF"
-              stroke-width="6"/>
+                    <stop
+                      offset="100%"
+                      stop-color="#168CFF"
+                      stop-opacity="0"/>
+                  </radialGradient>
 
-            <circle
-              cx="540"
-              cy="500"
-              r="105"
-              fill="none"
-              stroke="#8BC7FF"
-              stroke-width="2"
-              opacity="0.7"/>
+                  <radialGradient id="glowPurple">
+                    <stop
+                      offset="0%"
+                      stop-color="#7B4DFF"
+                      stop-opacity="0.40"/>
 
-            <text
-              x="540"
-              y="515"
-              text-anchor="middle"
-              font-family="DejaVu Sans, Arial, sans-serif"
-              font-size="58"
-              font-weight="800"
-              fill="white">
-              AI
-            </text>
+                    <stop
+                      offset="100%"
+                      stop-color="#7B4DFF"
+                      stop-opacity="0"/>
+                  </radialGradient>
 
-            <text
-              x="540"
-              y="675"
-              text-anchor="middle"
-              font-family="DejaVu Sans, Arial, sans-serif"
-              font-size="30"
-              font-weight="700"
-              letter-spacing="3"
-              fill="#9CCAFF">
-              FREE AI TOOL
-            </text>
+                </defs>
 
-            {''.join(text_elements)}
+                <rect
+                  width="1080"
+                  height="1920"
+                  fill="url(#bg)"/>
 
-          </svg>
-          """
+                <circle
+                  cx="150"
+                  cy="350"
+                  r="550"
+                  fill="url(#glowBlue)"/>
 
-          with open("scene1.svg", "w", encoding="utf-8") as f:
-              f.write(svg)
+                <circle
+                  cx="950"
+                  cy="1500"
+                  r="650"
+                  fill="url(#glowPurple)"/>
 
-          print("Scene SVG created.")
+                <g
+                  opacity="0.10"
+                  stroke="white"
+                  stroke-width="2">
+
+                  <path d="M0 200 H1080"/>
+                  <path d="M0 400 H1080"/>
+                  <path d="M0 600 H1080"/>
+                  <path d="M0 800 H1080"/>
+                  <path d="M0 1000 H1080"/>
+                  <path d="M0 1200 H1080"/>
+                  <path d="M0 1400 H1080"/>
+                  <path d="M0 1600 H1080"/>
+                  <path d="M0 1800 H1080"/>
+
+                  <path d="M180 0 V1920"/>
+                  <path d="M360 0 V1920"/>
+                  <path d="M540 0 V1920"/>
+                  <path d="M720 0 V1920"/>
+                  <path d="M900 0 V1920"/>
+
+                </g>
+
+                <circle
+                  cx="540"
+                  cy="500"
+                  r="135"
+                  fill="#07111F"
+                  stroke="#4DA3FF"
+                  stroke-width="6"/>
+
+                <circle
+                  cx="540"
+                  cy="500"
+                  r="105"
+                  fill="none"
+                  stroke="#8BC7FF"
+                  stroke-width="2"
+                  opacity="0.7"/>
+
+                <text
+                  x="540"
+                  y="515"
+                  text-anchor="middle"
+                  font-family="DejaVu Sans, Arial, sans-serif"
+                  font-size="58"
+                  font-weight="800"
+                  fill="white">
+                  AI
+                </text>
+
+                <text
+                  x="540"
+                  y="675"
+                  text-anchor="middle"
+                  font-family="DejaVu Sans, Arial, sans-serif"
+                  font-size="30"
+                  font-weight="700"
+                  letter-spacing="3"
+                  fill="#9CCAFF">
+                  {scene_type}
+                </text>
+
+                {''.join(text_elements)}
+
+              </svg>
+              """
+
+              filename = os.path.join(
+                  "scenes",
+                  f"scene{number}.svg"
+              )
+
+              with open(
+                  filename,
+                  "w",
+                  encoding="utf-8"
+              ) as f:
+                  f.write(svg)
+
+              print(
+                  f"Scene {number} SVG created."
+              )
+
+          print("ALL SCENE VISUALS CREATED.")
           PY
 
-      - name: Render Scene Image
+      - name: Render all scene images
         run: |
-          ffmpeg \
-            -y \
-            -i scene1.svg \
-            -frames:v 1 \
-            scene1.png
+          for svg in scenes/scene*.svg
+          do
+            number=$(echo "$svg" | sed -E 's/.*scene([0-9]+).svg/\1/')
 
-      - name: Create Video With Voice And Background Music
+            echo "Rendering Scene $number..."
+
+            ffmpeg -y \
+              -i "$svg" \
+              -frames:v 1 \
+              "scenes/scene${number}.png"
+          done
+
+      - name: Create individual scene videos
         run: |
-          mkdir -p output
+          for voice in scenes/scene*-voice.wav
+          do
 
-          VOICE_DURATION=$(cat voice_duration.txt)
+            number=$(echo "$voice" | sed -E 's/.*scene([0-9]+)-voice.wav/\1/')
 
-          echo "Creating final video..."
-          echo "Duration: $VOICE_DURATION seconds"
+            image="scenes/scene${number}.png"
 
-          ffmpeg \
-            -y \
-            -loop 1 \
-            -i scene1.png \
-            -i audio/voice.wav \
-            -stream_loop -1 \
-            -i audio/background-music.wav \
-            -t "$VOICE_DURATION" \
-            -filter_complex "[1:a]volume=1.0[voice_main];[2:a]volume=0.10[music_main];[music_main]afade=t=in:st=0:d=0.8[music_in];[music_in]afade=t=out:st=2.5:d=1.5[music_fade];[voice_main][music_fade]amix=inputs=2:duration=first:dropout_transition=2[mix];[mix]loudnorm=I=-16:TP=-1.5:LRA=7[aout]" \
-            -r 30 \
-            -vf "scale=1080:1920,zoompan=z='min(zoom+0.0007,1.04)':d=120:s=1080x1920:fps=30,format=yuv420p" \
-            -map 0:v:0 \
-            -map "[aout]" \
-            -c:v libx264 \
-            -preset veryfast \
-            -pix_fmt yuv420p \
-            -c:a aac \
-            -b:a 128k \
-            -shortest \
-            output/scene1-final.mp4
+            output="scenes/scene${number}-final.mp4"
 
-      - name: Verify Output
-        run: |
-          echo "Final video:"
-          ls -lh output/scene1-final.mp4
+            duration=$(ffprobe \
+              -v error \
+              -show_entries format=duration \
+              -of default=noprint_wrappers=1:nokey=1 \
+              "$voice")
+
+            echo ""
+            echo "=========================================="
+            echo "Rendering Scene $number"
+            echo "Duration: $duration"
+            echo "=========================================="
+
+            ffmpeg \
+              -y \
+              -loop 1 \
+              -i "$image" \
+              -i "$voice" \
+              -stream_loop -1 \
+              -i audio/background-music.wav \
+              -t "$duration" \
+              -filter_complex "[1:a]volume=1.0[voice];[2:a]volume=0.10[music];[music]afade=t=in:st=0:d=0.6[musicfade];[voice][musicfade]amix=inputs=2:duration=first:dropout_transition=2[mix];[mix]loudnorm=I=-16:TP=-1.5:LRA=7[aout]" \
+              -r 30 \
+              -vf "scale=1080:1920,zoompan=z='min(zoom+0.0007,1.04)':d=120:s=1080x1920:fps=30,format=yuv420p" \
+              -map 0:v:0 \
+              -map "[aout]" \
+              -c:v libx264 \
+              -preset veryfast \
+              -pix_fmt yuv420p \
+              -c:a aac \
+              -b:a 128k \
+              -shortest \
+              "$output"
+
+          done
 
           echo ""
-          echo "Background music:"
-          ls -lh audio/background-music.wav
+          echo "ALL SCENE VIDEOS CREATED."
+
+      - name: Create concat list
+        run: |
+          rm -f work/concat.txt
+
+          for video in $(find scenes -maxdepth 1 -name "scene*-final.mp4" | sort -V)
+          do
+            echo "file '$PWD/$video'" >> work/concat.txt
+          done
+
+          echo "Concat list:"
+          cat work/concat.txt
+
+      - name: Combine all scenes
+        run: |
+          ffmpeg \
+            -y \
+            -f concat \
+            -safe 0 \
+            -i work/concat.txt \
+            -c copy \
+            output/final-video.mp4
+
+      - name: Verify final video
+        run: |
+          echo ""
+          echo "=========================================="
+          echo "FINAL VIDEO"
+          echo "=========================================="
+
+          ls -lh output/final-video.mp4
 
           echo ""
           echo "Video information:"
@@ -426,17 +548,18 @@ jobs:
           ffprobe \
             -v error \
             -show_entries format=duration,size \
+            -show_entries stream=codec_name,width,height,r_frame_rate \
             -of default=noprint_wrappers=1 \
-            output/scene1-final.mp4
+            output/final-video.mp4
 
-      - name: Upload Scene 1 Files
+      - name: Upload final video
         uses: actions/upload-artifact@v4
         with:
-          name: scene1-final-music-test
+          name: final-multi-scene-video
           path: |
-            output/scene1-final.mp4
-            audio/voice-original.wav
-            audio/voice.wav
+            output/final-video.mp4
+            scenes/*.mp4
+            scenes/*.wav
             audio/background-music.wav
-            tts_text.txt
-            voice_duration.txt
+            scenes/*.png
+            scenes/*.svg
